@@ -39,14 +39,17 @@ async function runOrchestrator(env) {
       },
       {
         role: "user",
-        content: `Propose 1 famous Vietnamese True Crime case (vụ án có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) and 3 SEO YouTube titles for it in Vietnamese. 
+        content: `Propose 1 famous Vietnamese True Crime case (vụ án có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng).
+Generate a YouTube SEO title for it in Vietnamese in this exact style: 
+[Tên vụ án/Nhân vật]: [Tiêu đề phụ kịch tính tạo tò mò] | Vụ Án Có Thật [Địa danh xảy ra vụ án] [Năm xảy ra vụ án]
+
 Avoid these already completed cases: ${avoidFiguresStr}.
 
 You must respond in this exact JSON format:
-{"historical_figure": "Name of the case/person", "selected_title": "Title | Góc Tối Pháp Luật"}
+{"historical_figure": "Name of the case/person", "selected_title": "[Tên vụ án/Nhân vật]: [Tiêu đề phụ kịch tính] | Vụ Án Có Thật [Địa danh] [Năm]"}
 
 Example:
-{"historical_figure": "Vụ án Bạch Hải Đường", "selected_title": "Tướng Cướp Bạch Hải Đường - Tiếng Súng Cuối Cùng Và Giọt Nước Mắt Muộn Màng | Góc Tối Pháp Luật"}
+{"historical_figure": "Vụ án Biệt Thự Catinat", "selected_title": "Biệt Thự Catinat: Bữa Tiệc Giáng Sinh Cuối Cùng | Vụ Án Có Thật Sài Gòn 1942"}
 `
       }
     ];
