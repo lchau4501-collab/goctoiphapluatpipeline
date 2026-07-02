@@ -76,8 +76,8 @@ def main():
                 if os.path.exists(f):
                     os.remove(f)
                     
-            # Run ainovel-cli
-            subprocess.run(["./ainovel-cli", "--headless", "--prompt", prompt], check=True)
+            # Run Python script generator
+            subprocess.run([sys.executable, "scripts/generate_goc_toi_phap_luat.py", "--prompt", prompt], check=True)
             
             # Post-process
             logger.info("Running post_process.py...")

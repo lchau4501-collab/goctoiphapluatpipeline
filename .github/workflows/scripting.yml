@@ -12,19 +12,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Google Sheets dependencies
+      - name: Install dependencies
         run: |
-          pip install gspread google-auth google-api-python-client
+          pip install gspread google-auth google-api-python-client requests python-dotenv
 
       - name: Fetch Target Row from GSheet
         env:
@@ -39,10 +34,6 @@ jobs:
             echo "ROW_ID=${{ github.event.client_payload.id }}" >> $GITHUB_ENV
             echo "PROMPT=${{ github.event.client_payload.prompt }}" >> $GITHUB_ENV
           fi
-
-      - name: Download ainovel-cli
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/voocel/ainovel-cli/main/scripts/install.sh | AINOVEL_INSTALL_DIR=. sh
 
       - name: Setup API Configuration
         env:
@@ -74,7 +65,7 @@ jobs:
       - name: Run Scripting headless
         if: env.RUN_MODE == 'single'
         run: |
-          ./ainovel-cli --headless --prompt "${{ env.PROMPT }}"
+          python scripts/generate_goc_toi_phap_luat.py --prompt "${{ env.PROMPT }}"
 
       - name: Post-process Chapters
         if: env.RUN_MODE == 'single'

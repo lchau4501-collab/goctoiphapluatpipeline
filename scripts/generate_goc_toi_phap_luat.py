@@ -11,6 +11,8 @@ import json
 import time
 import logging
 import random
+import re
+import argparse
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 import requests
@@ -241,45 +243,42 @@ def save_state(state: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Failed to save state file: {e}")
 
-def run_phase_0(state: Dict[str, Any]):
-    logger.info("Starting Phase 0: True Crime Case & Title Generation...")
+def run_phase_0(state: Dict[str, Any], figure: str, title: str):
+    logger.info(f"Starting Phase 0: Outline Generation for {figure} - {title}...")
     
-    prompt = """
+    prompt = f"""
 Bạn là biên kịch trưởng cho kênh YouTube "Góc Tối Pháp Luật", chuyên xây dựng kịch bản True Crime Việt Nam trầm ấm, sâu sắc, nhân văn theo phong cách kể chuyện Nguyễn Ngọc Ngạn.
-Hãy chọn một vụ án hình sự có thật nổi tiếng tại Việt Nam (ưu tiên các vụ án miền Nam/Sài Gòn trước năm 1975 hoặc các vụ án kinh điển mang tính lịch sử).
+Chúng ta đang viết một kịch bản phim tài liệu vụ án chi tiết về:
+Vụ án/Nhân vật chính: {figure}
+Tiêu đề video: {title}
 
-Hãy tạo:
-1. Tên vụ án/Nhân vật chính (Ví dụ: "Vụ án Bạch Hải Đường" hoặc "Vụ án Tiệm vàng Kim Thanh").
-2. Một tiêu đề YouTube chuẩn SEO, kích thích tò mò, có hậu tố "| Góc Tối Pháp Luật".
-3. Đề cương chi tiết gồm đúng 6 phần tương ứng với tiến trình câu chuyện:
-   - Phần 1: Mở đầu & Cảnh báo (Giới thiệu địa danh, không khí và cảnh báo bằng tiếng Anh).
-   - Phần 2: Backstory (Bối cảnh gia đình, xã hội của nạn nhân/hung thủ).
-   - Phần 3: The Crime (Chi tiết vụ án diễn ra, hiện trường gián tiếp).
-   - Phần 4: Investigation (Quá trình điều tra, truy tìm manh mối).
-   - Phần 5: Breakthrough & Climax (Nút thắt tháo gỡ, bắt giữ, phiên tòa xét xử).
-   - Phần 6: Reflection & Outro (Chiêm nghiệm nhân văn và lời kêu gọi đăng ký kênh).
+Hãy tạo đề cương chi tiết gồm đúng 6 phần tương ứng với tiến trình câu chuyện:
+- Phần 1: Mở đầu & Cảnh báo (Giới thiệu địa danh, không khí và cảnh báo bằng tiếng Anh).
+- Phần 2: Backstory (Bối cảnh gia đình, xã hội của nạn nhân/hung thủ).
+- Phần 3: The Crime (Chi tiết vụ án diễn ra, hiện trường gián tiếp).
+- Phần 4: Investigation (Quá trình điều tra, truy tìm manh mối).
+- Phần 5: Breakthrough & Climax (Nút thắt tháo gỡ, bắt giữ, phiên tòa xét xử).
+- Phần 6: Reflection & Outro (Chiêm nghiệm nhân văn và lời kêu gọi đăng ký kênh).
 
 Trả về kết quả dưới dạng JSON có cấu trúc chính xác sau:
-{
-  "topic": "Tên vụ án hoặc nhân vật chính",
-  "title": "Tiêu đề video YouTube hoàn chỉnh",
+{{
   "outline": [
-    {
+    {{
       "section_number": 1,
       "title": "Tiêu đề phần 1 (Tối đa 8 từ)",
       "teaser": "Tóm tắt nội dung chính của phần này"
-    },
+    }},
     ... (đúng 6 phần)
   ]
-}
+}}
 """
     try:
         response_text = client_manager.generate_content(prompt, response_mime_type="application/json")
         raw_text = clean_text(response_text)
         data = json.loads(raw_text)
         
-        state["topic"] = data["topic"]
-        state["title"] = data["title"]
+        state["topic"] = figure
+        state["title"] = title
         state["outline"] = data["outline"]
         
         logger.info(f"Selected Case: {state['topic']}")
@@ -491,12 +490,86 @@ def compile_final_output(state: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Failed to compile output file: {e}")
 
+def save_chapters_as_files(state: Dict[str, Any]):
+    """Saves each generated section/chapter to output/novel/chapters/*.md."""
+    chapters_dir = "output/novel/chapters"
+    os.makedirs(chapters_dir, exist_ok=True)
+    logger.info(f"Saving chapter files to {chapters_dir}...")
+    
+    for sec_num in range(1, 7):
+        sec_key = str(sec_num)
+        filename = f"{sec_num:02d}.md"
+        file_path = os.path.join(chapters_dir, filename)
+        
+        content = state["sections"][sec_key]
+        
+        if sec_num == 6:
+            metadata_block = f"""
+
+=========================================
+=== YOUTUBE VIDEO METADATA PACKAGE ===
+=========================================
+{state["teaser"]}
+
+=========================================
+{state["video_package"]}
+"""
+            content += metadata_block
+            
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+            
+    logger.info("Successfully saved all 6 chapter files.")
+
+def parse_prompt(prompt_text: str) -> tuple:
+    """Parses prompt to extract True Crime Case (figure) and Title."""
+    # E.g. "Viết kịch bản chi tiết về vụ án Bạch Hải Đường: Tướng cướp hào hoa bằng tiếng Việt..."
+    match = re.search(r"vụ án\s+(.*?):\s*(.*?)\s+bằng", prompt_text, re.IGNORECASE)
+    if match:
+        figure = match.group(1).strip()
+        title = match.group(2).strip()
+        return figure, title
+        
+    if ":" in prompt_text:
+        parts = prompt_text.split(":")
+        figure = parts[0].strip()
+        figure = re.sub(r"Viết kịch bản chi tiết về vụ án\s+", "", figure, flags=re.IGNORECASE).strip()
+        title = parts[1].strip()
+        title = re.sub(r"\s+bằng tiếng Việt.*", "", title, flags=re.IGNORECASE).strip()
+        return figure, title
+        
+    topic = prompt_text.strip()
+    topic = re.sub(r"Viết kịch bản chi tiết về vụ án\s+", "", topic, flags=re.IGNORECASE).strip()
+    topic = re.sub(r"\s+bằng tiếng Việt.*", "", topic, flags=re.IGNORECASE).strip()
+    return topic, topic
+
 def main():
+    parser = argparse.ArgumentParser(description="Generate Goc Toi Phap Luat story using Gemini.")
+    parser.add_argument("--prompt", type=str, required=True, help="Input prompt from sheet orchestrator.")
+    args = parser.parse_args()
+    
     logger.info("Initializing Góc Tối Pháp Luật Script Generator...")
     state = load_state()
     
-    if not state["topic"] or not state["title"] or not state["outline"]:
-        run_phase_0(state)
+    figure, title = parse_prompt(args.prompt)
+    logger.info(f"Parsed Case: '{figure}' | Parsed Title: '{title}'")
+    
+    if state.get("topic") != figure or state.get("title") != title:
+        logger.info("New topic detected. Resetting state.")
+        state = {
+            "topic": figure,
+            "title": title,
+            "outline": [],
+            "sections": {},
+            "teaser": "",
+            "video_package": "",
+            "completed": False
+        }
+        if os.path.exists(STATE_FILE):
+            os.remove(STATE_FILE)
+            
+    if not state["outline"]:
+        run_phase_0(state, figure, title)
         
     for sec_num in range(1, 7):
         sec_key = str(sec_num)
@@ -519,6 +592,7 @@ def main():
     if not state["video_package"]:
         run_phase_4(state)
         
+    save_chapters_as_files(state)
     compile_final_output(state)
     
     state["completed"] = True
