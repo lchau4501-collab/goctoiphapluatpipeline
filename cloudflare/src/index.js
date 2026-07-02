@@ -71,13 +71,14 @@ async function runOrchestrator(env) {
         content: `Propose a list of 10 to 15 DIFFERENT famous, SPECIFIC Vietnamese True Crime cases (vụ án hình sự CỤ THỂ có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) related to keyword: "${keyword}". If the keyword is blank or too generic, you must still propose SPECIFIC, concrete historical cases.
 
 CRITICAL CONSTRAINTS:
-- The proposed ideas must be SPECIFIC, real-world Vietnamese true crime cases (vụ án cụ thể có thật), not made up, fictional, or generic types of crimes.
-- The "brief_details" MUST contain clear, specific, and sensational details about what actually happened in that specific case, including key details of the crime, the criminal's method, or the victim. Do NOT write generic or vague summaries.
+- The proposed cases MUST be real historical events with SPECIFIC names of victims, criminals, locations, or dates.
+- ABSOLUTELY FORBIDDEN to use vague placeholders or generic templates such as: "Một người đàn ông giết một số người", "Một sát nhân sát hại một phụ nữ ở biệt thự sang trọng", "Sử dụng cây gậy", "Sử dụng dao sắc". Everything must be a real historical true crime case with concrete facts.
+- The "brief_details" MUST contain clear, specific, and sensational details about what actually happened in that specific case (e.g. details of the crime, the criminal's method, or the victim's identity) without being excessively graphic/gory (không miêu tả máu me rùng rợn gây ám ảnh để tránh kích hoạt bộ lọc an toàn, nhưng phải cụ thể và lôi cuốn).
 - Strictly focus on civilian criminal/true crime cases (trộm cướp, sát nhân, án mạng biệt thự, lừa đảo, gián điệp hình sự...).
 - ABSOLUTELY DO NOT propose any cases related to political, revolutionary, or historical figures/war heroes of the Communist Party of Vietnam or the Vietnamese resistance wars (such as Đặng Thùy Trâm, Nguyễn Văn Trỗi, Võ Thị Sáu, Lý Tự Trọng, Nguyễn Văn Cừ, etc.).
 
 Each proposed case must contain:
-1. "historical_figure": Short name of the case/person (Tên ngắn gọn của vụ án)
+1. "historical_figure": Short name of the case/person (Tên ngắn gọn của vụ án hoặc thủ phạm)
 2. "selected_title": YouTube SEO title in this exact style: [historical_figure]: [dramatic subtitle] | Vụ Án Có Thật [Location] [Year]
 3. "brief_details": Very specific and detailed description of the real crime (chi tiết có thật và giật gân rõ ràng, cụ thể, tuyệt đối không viết chung chung)
 
@@ -94,13 +95,23 @@ You must respond in this exact JSON format:
   ]
 }
 
-Example:
+Examples of the expected level of details:
 {
   "ideas": [
     {
-      "historical_figure": "Vụ án Biệt Thự Catinat",
+      "historical_figure": "Vụ án vũ nữ Cẩm Nhung",
+      "selected_title": "Vũ Nữ Cẩm Nhung: Vụ Đánh Ghen Bằng Axit Chấn Động | Vụ Án Có Thật Sài Gòn 1963",
+      "brief_details": "Vụ đánh ghen tàn khốc nhắm vào vũ nữ nổi tiếng Cẩm Nhung do phu nhân của trung tá quân đội Trần Ngọc Thức thuê giang hồ thực hiện. Nạn nhân bị tạt axit Sunfuric đậm đặc ngay trước ngõ nhà, hủy hoại hoàn toàn khuôn mặt xinh đẹp."
+    },
+    {
+      "historical_figure": "Vụ án tiệm vàng Kim Sinh",
+      "selected_title": "Tiệm Vàng Kim Sinh: Thảm Án Đêm Mưa Lạnh | Vụ Án Có Thật Hà Nội 1999",
+      "brief_details": "Kẻ thủ ác Nguyễn Minh Châu đột nhập vào tiệm vàng Kim Sinh trên đường Tây Sơn vào nửa đêm. Hắn dùng dao và thanh sắt hạ sát dã man cả gia đình chủ tiệm gồm 4 người để cướp đi hàng chục lượng vàng rồi bỏ trốn."
+    },
+    {
+      "historical_figure": "Biệt thự Catinat Sài Gòn 1942",
       "selected_title": "Biệt Thự Catinat: Bữa Tiệc Giáng Sinh Cuối Cùng | Vụ Án Có Thật Sài Gòn 1942",
-      "brief_details": "Vụ sát hại một phụ nữ giàu có người Pháp ngay tại biệt thự sang trọng giữa trung tâm Sài Gòn vào đêm Noel, thủ phạm là người tình trẻ của bà."
+      "brief_details": "Vụ sát hại góa phụ giàu có người Pháp Marie-Louise tại biệt thự sang trọng trên đường Catinat vào đêm Noel. Thủ phạm là tình nhân trẻ của bà, kẻ đã dàn dựng vụ cướp để chiếm đoạt số trang sức đắt tiền."
     }
   ]
 }
