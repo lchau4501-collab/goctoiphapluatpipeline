@@ -22,8 +22,6 @@ const TELEGRAM_THREAD_ID = 3054;
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🚀 Góc Tối Pháp Luật Orchestrator')
-    .addItem('0. Trigger All (Active Row)', 'triggerAll')
-    .addSeparator()
     .addItem('1. Run Step 1 (New Idea)', 'runStep1')
     .addSeparator()
     .addItem('2a. Run Step 2 - Selected Row (Scripting)', 'runStep2')
@@ -204,16 +202,7 @@ function runStep3() {
   }
 }
 
-/**
- * 0. Kích hoạt toàn bộ luồng (Kích hoạt Step 2 và tự động nối tiếp Step 3)
- */
-function triggerAll() {
-  const rowData = getSelectedRowData();
-  if (!rowData) return;
-  
-  // Chạy Step 2, sau khi viết xong kịch bản GHA của Step 2 sẽ tự động gọi tiếp sang Step 3.
-  runStep2();
-}
+
 
 /**
  * 2b. Kích hoạt viết kịch bản cho toàn bộ các dòng ở trạng thái pending
