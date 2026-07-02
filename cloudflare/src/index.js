@@ -92,9 +92,9 @@ Example:
     throw new Error("Failed to generate a unique True Crime case after 4 attempts.");
   }
 
-  // 4. Append row to Master GSheet (GDrive folder link left empty for now)
+  // 4. Append row to ideation GSheet tab with status "idea"
   const newRowId = generateUUID();
-  console.log(`Appending new row to master sheet. ID: ${newRowId}`);
+  console.log(`Appending new row to ideation sheet. ID: ${newRowId}`);
   await appendSheetRow(
     env.GOOGLE_SERVICE_ACCOUNT_JSON || env.GOOGLE_SERVICE_ACCOUNT_TOKEN, 
     env.SPREADSHEET_ID, 
@@ -102,15 +102,10 @@ Example:
       newRowId,
       result.historical_figure,
       result.selected_title,
-      "Idea",
-      "", // E: GDrive Folder Link (left empty, created during Step 2)
-      "", // F: GDoc Script (original)
-      "", // G: GDoc Script (edited)
-      "", // H: Image Prompts (gsheet link)
-      "", // I: Image (gdrive link)
-      new Date().toISOString(), // J: Date Created
-      ""  // K: Voice (left empty for now)
-    ]
+      "idea",
+      new Date().toISOString()
+    ],
+    "ideation"
   );
 
   // 5. Trigger GitHub repository dispatch for scripting (Step 2) - COMMENTED OUT for human-in-the-loop approval
@@ -208,11 +203,11 @@ async function createGoogleDriveFolder(credsJson, parentId, folderName) {
 }
 
 // Google Sheets append row helper
-async function appendSheetRow(credsJson, spreadsheetId, values) {
+async function appendSheetRow(credsJson, spreadsheetId, values, sheetName = "goctoiphapluat") {
   const creds = typeof credsJson === 'string' ? JSON.parse(credsJson) : credsJson;
   const token = await getGoogleAuthToken(creds);
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/goctoiphapluat!A1:append?valueInputOption=USER_ENTERED`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:append?valueInputOption=USER_ENTERED`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
