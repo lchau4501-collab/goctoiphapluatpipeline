@@ -68,16 +68,18 @@ async function runOrchestrator(env) {
       },
       {
         role: "user",
-        content: `Propose a list of 10 to 15 DIFFERENT famous Vietnamese True Crime cases (vụ án hình sự có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) related to keyword: "${keyword}". If the keyword is blank or too generic, propose any famous Vietnamese True Crime cases.
+        content: `Propose a list of 10 to 15 DIFFERENT famous, SPECIFIC Vietnamese True Crime cases (vụ án hình sự CỤ THỂ có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) related to keyword: "${keyword}". If the keyword is blank or too generic, you must still propose SPECIFIC, concrete historical cases.
 
-CRITICAL CONSTRAINT:
+CRITICAL CONSTRAINTS:
+- The proposed ideas must be SPECIFIC, real-world Vietnamese true crime cases (vụ án cụ thể có thật), not made up, fictional, or generic types of crimes.
+- The "brief_details" MUST contain clear, specific, and sensational details about what actually happened in that specific case, including key details of the crime, the criminal's method, or the victim. Do NOT write generic or vague summaries.
 - Strictly focus on civilian criminal/true crime cases (trộm cướp, sát nhân, án mạng biệt thự, lừa đảo, gián điệp hình sự...).
 - ABSOLUTELY DO NOT propose any cases related to political, revolutionary, or historical figures/war heroes of the Communist Party of Vietnam or the Vietnamese resistance wars (such as Đặng Thùy Trâm, Nguyễn Văn Trỗi, Võ Thị Sáu, Lý Tự Trọng, Nguyễn Văn Cừ, etc.).
 
 Each proposed case must contain:
 1. "historical_figure": Short name of the case/person (Tên ngắn gọn của vụ án)
 2. "selected_title": YouTube SEO title in this exact style: [historical_figure]: [dramatic subtitle] | Vụ Án Có Thật [Location] [Year]
-3. "brief_details": Real and sensational details about the crime (một số chi tiết có thật và giật gân)
+3. "brief_details": Very specific and detailed description of the real crime (chi tiết có thật và giật gân rõ ràng, cụ thể, tuyệt đối không viết chung chung)
 
 Avoid these already completed or proposed cases: ${avoidFiguresStr}.
 
