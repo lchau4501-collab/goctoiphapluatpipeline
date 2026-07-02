@@ -72,7 +72,9 @@ async function runOrchestrator(env) {
 
 CRITICAL CONSTRAINTS:
 - The proposed cases MUST be real historical events with SPECIFIC names of victims, criminals, locations, or dates.
-- ABSOLUTELY FORBIDDEN to use vague placeholders or generic templates such as: "Một người đàn ông giết một số người", "Một sát nhân sát hại một phụ nữ ở biệt thự sang trọng", "Sử dụng cây gậy", "Sử dụng dao sắc". Everything must be a real historical true crime case with concrete facts.
+- The cases MUST be homicide/murder cases or political assassinations (các vụ án mạng, giết người, hoặc ám sát chính trị cụ thể).
+- ABSOLUTELY EXCLUDE any war-related massacres, battlefield deaths, or military operations (tuyệt đối không lấy các vụ thảm sát do chiến tranh hoặc sự kiện quân sự).
+- ABSOLUTELY FORBIDDEN to use vague placeholders or generic templates such as: "Một người đàn ông giết một số người bằng cây gậy", "Một sát nhân sát hại một phụ nữ ở biệt thự sang trọng", "Sử dụng cây gậy", "Sử dụng dao sắc". Everything must be a real historical true crime case with concrete facts.
 - The "brief_details" MUST contain clear, specific, and sensational details about what actually happened in that specific case (e.g. details of the crime, the criminal's method, or the victim's identity) without being excessively graphic/gory (không miêu tả máu me rùng rợn gây ám ảnh để tránh kích hoạt bộ lọc an toàn, nhưng phải cụ thể và lôi cuốn).
 - Strictly focus on civilian criminal/true crime cases (trộm cướp, sát nhân, án mạng biệt thự, lừa đảo, gián điệp hình sự...).
 - ABSOLUTELY DO NOT propose any cases related to political, revolutionary, or historical figures/war heroes of the Communist Party of Vietnam or the Vietnamese resistance wars (such as Đặng Thùy Trâm, Nguyễn Văn Trỗi, Võ Thị Sáu, Lý Tự Trọng, Nguyễn Văn Cừ, etc.).
