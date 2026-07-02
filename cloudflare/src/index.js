@@ -15,18 +15,47 @@ export default {
 };
 
 async function runOrchestrator(env) {
-  // 1. Fetch Google Sheet to check completed historical figures (avoid duplicates)
+  const credentials = env.GOOGLE_SERVICE_ACCOUNT_JSON || env.GOOGLE_SERVICE_ACCOUNT_TOKEN;
+  
+  // 1. Fetch current completed cases from master tab
   console.log("Fetching past historical figures from Google Sheets...");
-  const sheetData = await fetchGoogleSheet(env.GOOGLE_SERVICE_ACCOUNT_JSON || env.GOOGLE_SERVICE_ACCOUNT_TOKEN, env.SPREADSHEET_ID);
-  const completedFigures = sheetData.map(row => row.historical_figure || row["Historical Figure"]).filter(Boolean);
+  let completedRows = [];
+  try {
+    completedRows = await fetchGoogleSheetRange(credentials, env.SPREADSHEET_ID, "goctoiphapluat!B2:B2000");
+  } catch (e) {
+    console.log("Warning: Failed to fetch completed figures. Proceeding with empty list.");
+  }
+  const completedFigures = completedRows.map(row => row[0] ? row[0].toString().trim() : "").filter(Boolean);
 
-  // 2. Call Cloudflare Workers AI to generate a new True Crime case and titles with fuzzy duplicate check
-  console.log("Generating new True Crime case using Cloudflare AI...");
+  // 2. Fetch keyword from 'ideation!C1'
+  let keyword = "";
+  try {
+    const ideationC1 = await fetchGoogleSheetRange(credentials, env.SPREADSHEET_ID, "ideation!C1");
+    if (ideationC1 && ideationC1[0] && ideationC1[0][0]) {
+      keyword = ideationC1[0][0].toString().trim();
+    }
+  } catch (e) {
+    console.log("Warning: Failed to fetch keyword from C1. Proceeding with empty keyword.");
+  }
+  console.log(`Keyword from C1: "${keyword}"`);
+
+  // Fetch proposed figures from 'ideation' tab to avoid duplicates
+  let ideationRows = [];
+  try {
+    ideationRows = await fetchGoogleSheetRange(credentials, env.SPREADSHEET_ID, "ideation!B3:B2000");
+  } catch (e) {
+    console.log("Warning: Failed to fetch ideation figures. Proceeding with empty list.");
+  }
+  const proposedFigures = ideationRows.map(row => row[0] ? row[0].toString().trim() : "").filter(Boolean);
+  
+  const allAvoidFigures = [...completedFigures, ...proposedFigures];
+  const recentCompleted = allAvoidFigures.slice(-30);
+  const avoidFiguresStr = recentCompleted.length > 0 ? recentCompleted.join(", ") : "None";
+
+  // 3. Call Cloudflare Workers AI to generate 10-15 different True Crime cases
+  console.log("Generating 10-15 different True Crime cases using Cloudflare AI...");
   let result = null;
   let attempts = 0;
-  
-  const recentCompleted = completedFigures.slice(-20);
-  const avoidFiguresStr = recentCompleted.length > 0 ? recentCompleted.join(", ") : "None";
   
   while (attempts < 4) {
     attempts++;
@@ -39,17 +68,35 @@ async function runOrchestrator(env) {
       },
       {
         role: "user",
-        content: `Propose 1 famous Vietnamese True Crime case (vụ án có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng).
-Generate a YouTube SEO title for it in Vietnamese in this exact style: 
-[Tên vụ án/Nhân vật]: [Tiêu đề phụ kịch tính tạo tò mò] | Vụ Án Có Thật [Địa danh xảy ra vụ án] [Năm xảy ra vụ án]
+        content: `Propose a list of 10 to 15 DIFFERENT famous Vietnamese True Crime cases (vụ án có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) related to keyword: "${keyword}". If the keyword is blank or too generic, propose any famous Vietnamese True Crime cases.
+Each proposed case must contain:
+1. "historical_figure": Short name of the case/person (Tên ngắn gọn của vụ án)
+2. "selected_title": YouTube SEO title in this exact style: [historical_figure]: [dramatic subtitle] | Vụ Án Có Thật [Location] [Year]
+3. "brief_details": Real and sensational details about the crime (một số chi tiết có thật và giật gân)
 
-Avoid these already completed cases: ${avoidFiguresStr}.
+Avoid these already completed or proposed cases: ${avoidFiguresStr}.
 
 You must respond in this exact JSON format:
-{"historical_figure": "Name of the case/person", "selected_title": "[Tên vụ án/Nhân vật]: [Tiêu đề phụ kịch tính] | Vụ Án Có Thật [Địa danh] [Năm]"}
+{
+  "ideas": [
+    {
+      "historical_figure": "Name of the case",
+      "selected_title": "Name: Subtitle | Vụ Án Có Thật Location Year",
+      "brief_details": "Details here"
+    }
+  ]
+}
 
 Example:
-{"historical_figure": "Vụ án Biệt Thự Catinat", "selected_title": "Biệt Thự Catinat: Bữa Tiệc Giáng Sinh Cuối Cùng | Vụ Án Có Thật Sài Gòn 1942"}
+{
+  "ideas": [
+    {
+      "historical_figure": "Vụ án Biệt Thự Catinat",
+      "selected_title": "Biệt Thự Catinat: Bữa Tiệc Giáng Sinh Cuối Cùng | Vụ Án Có Thật Sài Gòn 1942",
+      "brief_details": "Vụ sát hại một phụ nữ giàu có người Pháp ngay tại biệt thự sang trọng giữa trung tâm Sài Gòn vào đêm Noel, thủ phạm là người tình trẻ của bà."
+    }
+  ]
+}
 `
       }
     ];
@@ -57,7 +104,7 @@ Example:
     try {
       const aiResponse = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fp8-fast", {
         messages,
-        max_tokens: 2048
+        max_tokens: 4096
       });
       let responseText = aiResponse.response || aiResponse;
       if (typeof responseText !== 'string') {
@@ -66,62 +113,94 @@ Example:
       
       const jsonStr = extractFirstJsonObject(responseText);
       if (!jsonStr) {
-        console.log("Could not find a valid JSON object in the AI response: " + responseText);
+        console.log("Could not find a valid JSON object in the AI response.");
         continue;
       }
       
       const tempResult = JSON.parse(jsonStr);
-      const figure = tempResult.historical_figure || "";
-      if (!figure) continue;
-      
-      const figNorm = normalizeText(figure);
-      const isDuplicate = completedFigures.some(fig => normalizeText(fig) === figNorm);
-      if (isDuplicate) {
-        console.log(`Duplicate filtered out: Case "${figure}" is already in completed list.`);
-        continue;
+      if (tempResult.ideas && Array.isArray(tempResult.ideas) && tempResult.ideas.length >= 10) {
+        // Filter out duplicates
+        const uniqueIdeas = [];
+        for (const idea of tempResult.ideas) {
+          const figure = idea.historical_figure || "";
+          if (!figure) continue;
+          
+          const figNorm = normalizeText(figure);
+          const isDuplicate = allAvoidFigures.some(fig => normalizeText(fig) === figNorm);
+          if (!isDuplicate) {
+            uniqueIdeas.push(idea);
+          }
+        }
+        
+        if (uniqueIdeas.length >= 5) { // Ensure we got a good number of unique ideas
+          tempResult.ideas = uniqueIdeas;
+          result = tempResult;
+          break;
+        } else {
+          console.log("Too many duplicate cases generated. Retrying...");
+        }
+      } else {
+        console.log("AI returned less than 10 ideas. Retrying...");
       }
-      
-      result = tempResult;
-      break;
     } catch (e) {
       console.log(`Error in attempt ${attempts}: ${e.message}`);
     }
   }
   
-  if (!result) {
-    throw new Error("Failed to generate a unique True Crime case after 4 attempts.");
+  if (!result || !result.ideas || result.ideas.length === 0) {
+    throw new Error("Failed to generate unique True Crime cases after 4 attempts.");
   }
 
-  // 4. Append row to ideation GSheet tab with status "idea"
-  const newRowId = generateUUID();
-  console.log(`Appending new row to ideation sheet. ID: ${newRowId}`);
-  await appendSheetRow(
-    env.GOOGLE_SERVICE_ACCOUNT_JSON || env.GOOGLE_SERVICE_ACCOUNT_TOKEN, 
-    env.SPREADSHEET_ID, 
-    [
-      newRowId,
-      result.historical_figure,
-      result.selected_title,
-      "idea",
-      new Date().toISOString()
-    ],
-    "ideation"
-  );
-
-  // 5. Trigger GitHub repository dispatch for scripting (Step 2) - COMMENTED OUT for human-in-the-loop approval
-  console.log("Skipping automatic GHA trigger. Waiting for manual approval in GSheet.");
-  /*
-  await triggerGitHubWorkflow(
-    "YOUR_GITHUB_TOKEN_HERE", 
-    "lchau4501-collab", 
-    "goctoiphapluat-step2-scripting", 
-    "run-scripting", 
-    {
-      id: newRowId,
-      prompt: `Viết kịch bản chi tiết về vụ án ${result.historical_figure}: ${result.selected_title} theo phong cách kịch bản Góc Tối Pháp Luật.`
+  // 4. Find the first empty row starting from row 3 in 'ideation' tab
+  let ideationFullRows = [];
+  try {
+    ideationFullRows = await fetchGoogleSheetRange(credentials, env.SPREADSHEET_ID, "ideation!A3:F2000");
+  } catch (e) {
+    console.log("Warning: Failed to fetch ideation rows. Proceeding with empty list.");
+  }
+  
+  let firstEmptyRowIdx = 3;
+  for (let i = 0; i < ideationFullRows.length; i++) {
+    const row = ideationFullRows[i];
+    const hasData = row.some(cell => cell !== null && cell !== "");
+    if (!hasData) {
+      firstEmptyRowIdx = i + 3;
+      break;
     }
-  );
-  */
+  }
+  if (firstEmptyRowIdx === 3 && ideationFullRows.length > 0) {
+    firstEmptyRowIdx = ideationFullRows.length + 3;
+  }
+  
+  console.log(`First empty row in ideation tab found at: ${firstEmptyRowIdx}`);
+
+  // 5. Append generated ideas to 'ideation' tab
+  const updates = [];
+  const startRow = firstEmptyRowIdx;
+  const maxTargetRow = startRow + result.ideas.length;
+  
+  await ensureSheetRows(credentials, env.SPREADSHEET_ID, "ideation", maxTargetRow);
+  
+  for (let i = 0; i < result.ideas.length; i++) {
+    const idea = result.ideas[i];
+    const currentRowIdx = startRow + i;
+    
+    updates.push({
+      range: `ideation!A${currentRowIdx}:F${currentRowIdx}`,
+      values: [[
+        generateUUID(),
+        idea.historical_figure,
+        idea.selected_title,
+        idea.brief_details,
+        "idea",
+        new Date().toISOString()
+      ]]
+    });
+  }
+  
+  console.log(`Sending batch update to sheet for ${updates.length} rows...`);
+  await batchUpdateSheet(credentials, env.SPREADSHEET_ID, updates);
+  console.log("Successfully wrote generated ideas to 'ideation' tab!");
 }
 
 // Helper: Normalize text by stripping accents, all punctuation/quotes and spaces
@@ -144,33 +223,27 @@ function generateUUID() {
   });
 }
 
-// Google Sheets API fetch helper
-async function fetchGoogleSheet(credsJson, spreadsheetId) {
-  // Parsing service account details
+// Google Sheets API fetch range helper
+async function fetchGoogleSheetRange(credsJson, spreadsheetId, range) {
   const creds = typeof credsJson === 'string' ? JSON.parse(credsJson) : credsJson;
   const token = await getGoogleAuthToken(creds);
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/goctoiphapluat!A1:H100`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
   const response = await fetch(url, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch sheet values: ${response.statusText}`);
+    throw new Error(`Failed to fetch sheet range ${range}: ${response.statusText}`);
   }
   
   const data = await response.json();
-  const rows = data.values;
-  if (!rows || rows.length <= 1) return [];
-  
-  const headers = rows[0];
-  return rows.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((header, index) => {
-      obj[header] = row[index];
-    });
-    return obj;
-  });
+  return data.values || [];
+}
+
+// Google Sheets API fetch helper (legacy compatibility)
+async function fetchGoogleSheet(credsJson, spreadsheetId) {
+  return await fetchGoogleSheetRange(credsJson, spreadsheetId, "goctoiphapluat!A1:H100");
 }
 
 // Google Drive API folder creation helper
@@ -224,7 +297,87 @@ async function appendSheetRow(credsJson, spreadsheetId, values, sheetName = "goc
   }
 }
 
-// GitHub Workflow dispatch helper
+// Helper: Batch update values in Google Sheets
+async function batchUpdateSheet(credsJson, spreadsheetId, updates) {
+  const creds = typeof credsJson === 'string' ? JSON.parse(credsJson) : credsJson;
+  const token = await getGoogleAuthToken(creds);
+  
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`;
+  const payload = {
+    valueInputOption: "USER_ENTERED",
+    data: updates
+  };
+  
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to batch update sheet: ${response.statusText}. Response: ${errText}`);
+  }
+}
+
+// Helper: Ensure Sheet has enough rows
+async function ensureSheetRows(credsJson, spreadsheetId, sheetName, requiredRows) {
+  const creds = typeof credsJson === 'string' ? JSON.parse(credsJson) : credsJson;
+  const token = await getGoogleAuthToken(creds);
+  
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=false`;
+  const metaResponse = await fetch(metaUrl, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!metaResponse.ok) {
+    throw new Error(`Failed to fetch spreadsheet metadata: ${metaResponse.statusText}`);
+  }
+  const metaData = await metaResponse.json();
+  
+  const targetSheet = metaData.sheets.find(s => s.properties.title === sheetName);
+  if (!targetSheet) {
+    throw new Error(`Sheet with title "${sheetName}" not found.`);
+  }
+  
+  const sheetId = targetSheet.properties.sheetId;
+  const currentRowCount = targetSheet.properties.gridProperties.rowCount;
+  
+  if (currentRowCount < requiredRows) {
+    const addRowsCount = requiredRows - currentRowCount;
+    console.log(`Sheet "${sheetName}" row count (${currentRowCount}) is less than required (${requiredRows}). Appending ${addRowsCount} rows...`);
+    
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+    const updateResponse = await fetch(updateUrl, {
+      method: "POST",
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            appendDimension: {
+              sheetId: sheetId,
+              dimension: "ROWS",
+              length: addRowsCount
+            }
+          }
+        ]
+      })
+    });
+    
+    if (!updateResponse.ok) {
+      const errText = await updateResponse.text();
+      throw new Error(`Failed to append rows to sheet: ${errText}`);
+    }
+    console.log(`Successfully appended ${addRowsCount} rows to sheet "${sheetName}".`);
+  }
+}
+
+// GitHub Workflow dispatch helper (legacy compatibility)
 async function triggerGitHubWorkflow(token, owner, repo, eventType, payload) {
   const url = `https://api.github.com/repos/${owner}/${repo}/dispatches`;
   const response = await fetch(url, {
@@ -262,7 +415,6 @@ async function getGoogleAuthToken(creds) {
   
   const signatureInput = `${header}.${claimSet}`;
   
-  // Import the RSA private key in Cloudflare Web Crypto API
   const pemHeader = "-----BEGIN PRIVATE KEY-----";
   const pemFooter = "-----END PRIVATE KEY-----";
   const pemContents = creds.private_key
@@ -291,7 +443,6 @@ async function getGoogleAuthToken(creds) {
   
   const jwt = `${signatureInput}.${arrayBufferToBase64Url(signature)}`;
   
-  // Call token exchange endpoint
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

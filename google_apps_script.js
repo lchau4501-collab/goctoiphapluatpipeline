@@ -30,9 +30,8 @@ function onOpen() {
     .addItem('3a. Run Step 3 - Selected Row (Prompts)', 'runStep3')
     .addItem('3b. Run Step 3 - All Script Rows (Prompts)', 'runStep3AllScript')
     .addSeparator()
-    .addItem('4. Check Duplication (Proposal C1)', 'checkDuplication')
-    .addItem('5. Check Duplication in History (B2:B)', 'checkDuplicationInHistory')
-    .addItem('6. Move Chosen Rows to goctoiphapluat', 'moveChosenToGoctoiphapluat')
+    .addItem('4. Check Duplication in History (B2:B)', 'checkDuplicationInHistory')
+    .addItem('5. Move Chosen Rows to goctoiphapluat', 'moveChosenToGoctoiphapluat')
     .addToUi();
 }
 
@@ -354,59 +353,7 @@ function getGMT7DateTimeString() {
   return Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
 }
 
-/**
- * Cơ chế kiểm tra trùng lặp cho Proposal nằm ở C1 của tab sheet "ideation"
- * So sánh với cột B (từ dòng 2 trở đi) của tab sheet "goctoiphapluat"
- * Trả kết quả "⛔ Duplicated" hoặc "✅Passed" vào ô E1
- */
-function checkDuplication() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ideationSheet = ss.getSheetByName("ideation");
-  if (!ideationSheet) {
-    SpreadsheetApp.getUi().alert("Không tìm thấy tab sheet 'ideation'.");
-    return;
-  }
-  
-  const proposalVal = ideationSheet.getRange("C1").getValue().toString().trim();
-  if (!proposalVal) {
-    ideationSheet.getRange("E1").setValue("");
-    SpreadsheetApp.getUi().alert("Ô C1 (Proposal) đang trống, vui lòng nhập giá trị trước khi check.");
-    return;
-  }
-  
-  const masterSheet = ss.getSheetByName("goctoiphapluat");
-  if (!masterSheet) {
-    SpreadsheetApp.getUi().alert("Không tìm thấy tab sheet 'goctoiphapluat'.");
-    return;
-  }
-  
-  const lastRow = masterSheet.getLastRow();
-  if (lastRow < 2) {
-    ideationSheet.getRange("E1").setValue("✅Passed");
-    SpreadsheetApp.getActiveSpreadsheet().toast("Đã kiểm tra trùng lặp cho: " + proposalVal, "Check Duplication Done");
-    return;
-  }
-  
-  const values = masterSheet.getRange(2, 2, lastRow - 1, 1).getValues();
-  const proposalNorm = normalizeText(proposalVal);
-  
-  let isDuplicated = false;
-  for (let i = 0; i < values.length; i++) {
-    const historicalFigureNorm = normalizeText(values[i][0]);
-    if (historicalFigureNorm === proposalNorm) {
-      isDuplicated = true;
-      break;
-    }
-  }
-  
-  if (isDuplicated) {
-    ideationSheet.getRange("E1").setValue("⛔ Duplicated");
-  } else {
-    ideationSheet.getRange("E1").setValue("✅Passed");
-  }
-  
-  SpreadsheetApp.getActiveSpreadsheet().toast("Đã kiểm tra trùng lặp cho: " + proposalVal, "Check Duplication Done");
-}
+
 
 /**
  * Quét toàn bộ cột B (B2:B) của tab "goctoiphapluat" để tìm và cảnh báo các nhân vật bị trùng lặp gần giống nhau
@@ -508,7 +455,7 @@ function moveChosenToGoctoiphapluat() {
     return;
   }
   
-  const ideationValues = ideationSheet.getRange(3, 1, lastRowIdeation - 2, 5).getValues();
+  const ideationValues = ideationSheet.getRange(3, 1, lastRowIdeation - 2, 6).getValues();
   let countMoved = 0;
   
   for (let i = 0; i < ideationValues.length; i++) {
@@ -516,7 +463,7 @@ function moveChosenToGoctoiphapluat() {
     const id = row[0];
     const figure = row[1];
     const title = row[2];
-    const status = row[3].toString().trim().toLowerCase();
+    const status = row[4].toString().trim().toLowerCase(); // Column E
     
     if (status === "chosen") {
       const destRowIdx = getFirstEmptyRowInGoctoiphapluat(masterSheet);
@@ -533,7 +480,7 @@ function moveChosenToGoctoiphapluat() {
       ];
       
       masterSheet.getRange(destRowIdx, 1, 1, 11).setValues([destValues]);
-      ideationSheet.getRange(i + 3, 4).setValue("moved");
+      ideationSheet.getRange(i + 3, 5).setValue("moved"); // Set moved in Column E
       countMoved++;
     }
   }
