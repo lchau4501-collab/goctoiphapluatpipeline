@@ -68,7 +68,12 @@ async function runOrchestrator(env) {
       },
       {
         role: "user",
-        content: `Propose a list of 10 to 15 DIFFERENT famous Vietnamese True Crime cases (vụ án có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) related to keyword: "${keyword}". If the keyword is blank or too generic, propose any famous Vietnamese True Crime cases.
+        content: `Propose a list of 10 to 15 DIFFERENT famous Vietnamese True Crime cases (vụ án hình sự có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) related to keyword: "${keyword}". If the keyword is blank or too generic, propose any famous Vietnamese True Crime cases.
+
+CRITICAL CONSTRAINT:
+- Strictly focus on civilian criminal/true crime cases (trộm cướp, sát nhân, án mạng biệt thự, lừa đảo, gián điệp hình sự...).
+- ABSOLUTELY DO NOT propose any cases related to political, revolutionary, or historical figures/war heroes of the Communist Party of Vietnam or the Vietnamese resistance wars (such as Đặng Thùy Trâm, Nguyễn Văn Trỗi, Võ Thị Sáu, Lý Tự Trọng, Nguyễn Văn Cừ, etc.).
+
 Each proposed case must contain:
 1. "historical_figure": Short name of the case/person (Tên ngắn gọn của vụ án)
 2. "selected_title": YouTube SEO title in this exact style: [historical_figure]: [dramatic subtitle] | Vụ Án Có Thật [Location] [Year]
