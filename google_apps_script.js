@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🚀 GOOGLE APPS SCRIPT: GÓC TỐI PHÁP LUẬT AUTOMATION MENU
+// 🚀 GOOGLE APPS SCRIPT: GÓC TỐI PHÁP LUẬT AUTOMATION MENU & TELEGRAM WEBHOOK
 // ==============================================================================
 // HƯỚNG DẪN CÀI ĐẶT:
 // 1. Mở file Google Sheet của anh.
@@ -11,9 +11,13 @@
 
 const GH_OWNER = "lchau4501-collab";
 const GH_TOKEN = "YOUR_GITHUB_TOKEN_HERE"; // GitHub Token của anh
-// Cấu hình URL Cloudflare Worker (thay thế sau khi anh xác định subdomain)
 const CF_WORKER_URL = "https://goc-toi-phap-luat-orchestrator.lchau4501.workers.dev";
 const GDRIVE_PARENT_FOLDER_ID = "1BABIF2g-U6RqAgNyjs7hOACOiPmFvYPC"; // ID thư mục Drive cha của anh
+
+// Cấu hình Telegram (nếu có dùng sau này)
+const TELEGRAM_BOT_TOKEN = "8918993375:AAGVmK3WTLTtHikX-P1PRzNZ9CEGqs3XuUY";
+const TELEGRAM_CHAT_ID = -1003954353565;
+const TELEGRAM_THREAD_ID = 3054;
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -29,8 +33,23 @@ function onOpen() {
     .addItem('3b. Run Step 3 - All Script Rows (Prompts)', 'runStep3AllScript')
     .addSeparator()
     .addItem('4. Check Duplication (Proposal C1)', 'checkDuplication')
-    .addItem('5. Move Chosen Rows to goctoiphapluat', 'moveChosenToGoctoiphapluat')
+    .addItem('5. Check Duplication in History (B2:B)', 'checkDuplicationInHistory')
+    .addItem('6. Move Chosen Rows to goctoiphapluat', 'moveChosenToGoctoiphapluat')
     .addToUi();
+}
+
+/**
+ * Helper: Chuẩn hóa chuỗi để so sánh trùng lặp gần đúng (bỏ dấu tiếng Việt, dấu câu, khoảng trắng)
+ */
+function normalizeText(str) {
+  if (!str) return "";
+  return str.toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/['’‘"“”\-\.,:;!\?_#\*]/g, "") // Remove all punctuation, quotes, hashtags
+    .replace(/\s+/g, " ") // Collapse multiple spaces
+    .trim();
 }
 
 /**
@@ -380,12 +399,12 @@ function checkDuplication() {
   }
   
   const values = masterSheet.getRange(2, 2, lastRow - 1, 1).getValues();
-  const proposalLower = proposalVal.toLowerCase();
+  const proposalNorm = normalizeText(proposalVal);
   
   let isDuplicated = false;
   for (let i = 0; i < values.length; i++) {
-    const historicalFigure = values[i][0].toString().trim().toLowerCase();
-    if (historicalFigure === proposalLower) {
+    const historicalFigureNorm = normalizeText(values[i][0]);
+    if (historicalFigureNorm === proposalNorm) {
       isDuplicated = true;
       break;
     }
@@ -398,6 +417,57 @@ function checkDuplication() {
   }
   
   SpreadsheetApp.getActiveSpreadsheet().toast("Đã kiểm tra trùng lặp cho: " + proposalVal, "Check Duplication Done");
+}
+
+/**
+ * Quét toàn bộ cột B (B2:B) của tab "goctoiphapluat" để tìm và cảnh báo các nhân vật bị trùng lặp gần giống nhau
+ */
+function checkDuplicationInHistory() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const historySheet = ss.getSheetByName("goctoiphapluat");
+  if (!historySheet) {
+    SpreadsheetApp.getUi().alert("Không tìm thấy tab sheet 'goctoiphapluat'.");
+    return;
+  }
+  
+  const lastRow = historySheet.getLastRow();
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert("Không có dữ liệu trong cột B để kiểm tra.");
+    return;
+  }
+  
+  const values = historySheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  const normalizedMap = {}; // Lưu trữ figureNorm -> danh sách các dòng
+  const duplicates = []; // Lưu trữ kết quả trùng lặp
+  
+  for (let i = 0; i < values.length; i++) {
+    const rawVal = values[i][0].toString().trim();
+    if (!rawVal) continue;
+    
+    const normVal = normalizeText(rawVal);
+    const rowNum = i + 2; // Dòng thực tế trên Google Sheets
+    
+    if (normalizedMap[normVal]) {
+      normalizedMap[normVal].push({ row: rowNum, raw: rawVal });
+      if (normalizedMap[normVal].length === 2) {
+        duplicates.push(normVal);
+      }
+    } else {
+      normalizedMap[normVal] = [{ row: rowNum, raw: rawVal }];
+    }
+  }
+  
+  if (duplicates.length === 0) {
+    SpreadsheetApp.getUi().alert("✅ Kết quả kiểm tra:\nKhông phát hiện bất kỳ vụ án trùng lặp nào trong cột B2:B của tab 'goctoiphapluat'!");
+  } else {
+    let alertMsg = "🚨 PHÁT HIỆN TRÙNG LẶP TRONG LỊCH SỬ (B2:B):\n\n";
+    duplicates.forEach((norm) => {
+      const occs = normalizedMap[norm];
+      alertMsg += `• Vụ án/Nhân vật: "${occs[0].raw}"\n  Trùng nhau tại các dòng: ` + occs.map(o => `Dòng ${o.row}`).join(", ") + "\n\n";
+    });
+    alertMsg += "Vui lòng kiểm tra và xử lý các dòng trùng lặp trên.";
+    SpreadsheetApp.getUi().alert(alertMsg);
+  }
 }
 
 /**
@@ -483,5 +553,84 @@ function moveChosenToGoctoiphapluat() {
     SpreadsheetApp.getUi().alert(`Đã chuyển thành công ${countMoved} dòng có trạng thái 'chosen' sang tab 'goctoiphapluat' với trạng thái 'pending'.`);
   } else {
     SpreadsheetApp.getUi().alert("Không tìm thấy dòng nào có trạng thái 'chosen' để chuyển.");
+  }
+}
+
+// ⏰ Tự động kích hoạt Step 2 (Scripting) cho tất cả các dòng "pending"
+function autoTriggerStep2() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const historySheet = ss.getSheetByName("goctoiphapluat");
+  if (!historySheet) return;
+  
+  const lastRow = historySheet.getLastRow();
+  let pendingCount = 0;
+  if (lastRow >= 2) {
+    const values = historySheet.getRange(2, 4, lastRow - 1, 1).getValues();
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0].toString().trim().toLowerCase() === "pending") {
+        pendingCount++;
+      }
+    }
+  }
+  
+  // Nếu phát hiện có ít nhất 1 dòng pending, gửi lệnh kích hoạt GHA
+  if (pendingCount > 0) {
+    const url = "https://api.github.com/repos/" + GH_OWNER + "/goctoiphapluat-step2-scripting/dispatches";
+    const payload = { event_type: "run-scripting" };
+    const options = {
+      method: "post",
+      headers: {
+        "Authorization": "token " + GH_TOKEN,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "GoogleAppsScript"
+      },
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+    UrlFetchApp.fetch(url, options);
+    Logger.log("Đã tự động kích hoạt Step 2 cho " + pendingCount + " dòng pending.");
+  }
+}
+
+// ⏰ Tự động kích hoạt Step 3 (Prompts) cho tất cả các dòng "script"
+function autoTriggerStep3() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const historySheet = ss.getSheetByName("goctoiphapluat");
+  if (!historySheet) return;
+  
+  const lastRow = historySheet.getLastRow();
+  let hasPending = false;
+  let scriptCount = 0;
+  
+  if (lastRow >= 2) {
+    const values = historySheet.getRange(2, 4, lastRow - 1, 1).getValues();
+    for (let i = 0; i < values.length; i++) {
+      const val = values[i][0].toString().trim().toLowerCase();
+      if (val === "pending") {
+        hasPending = true; // Vẫn còn dòng đang viết kịch bản
+      } else if (val === "script") {
+        scriptCount++; // Các dòng đã có kịch bản đang chờ tạo prompt
+      }
+    }
+  }
+  
+  // Chỉ chạy nếu không còn dòng pending nào để tránh xung đột và có ít nhất 1 dòng script
+  if (!hasPending && scriptCount > 0) {
+    const url = "https://api.github.com/repos/" + GH_OWNER + "/goctoiphapluat-step3-prompts/dispatches";
+    const payload = { event_type: "run-prompts" };
+    const options = {
+      method: "post",
+      headers: {
+        "Authorization": "token " + GH_TOKEN,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "GoogleAppsScript"
+      },
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+    UrlFetchApp.fetch(url, options);
+    Logger.log("Đã tự động kích hoạt Step 3 cho " + scriptCount + " dòng script.");
   }
 }

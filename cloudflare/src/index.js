@@ -20,17 +20,27 @@ async function runOrchestrator(env) {
   const sheetData = await fetchGoogleSheet(env.GOOGLE_SERVICE_ACCOUNT_JSON || env.GOOGLE_SERVICE_ACCOUNT_TOKEN, env.SPREADSHEET_ID);
   const completedFigures = sheetData.map(row => row.historical_figure || row["Historical Figure"]).filter(Boolean);
 
-  // 2. Call Cloudflare Workers AI to generate a new True Crime case and titles
+  // 2. Call Cloudflare Workers AI to generate a new True Crime case and titles with fuzzy duplicate check
   console.log("Generating new True Crime case using Cloudflare AI...");
-  const messages = [
-    {
-      role: "system",
-      content: "You are a database generator. You output ONLY valid JSON, with absolutely no markdown formatting, backticks, or extra commentary. Your output must be a single JSON object."
-    },
-    {
-      role: "user",
-      content: `Propose 1 famous Vietnamese True Crime case (vụ án có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) and 3 SEO YouTube titles for it in Vietnamese. 
-Avoid these already completed cases: ${completedFigures.join(", ")}.
+  let result = null;
+  let attempts = 0;
+  
+  const recentCompleted = completedFigures.slice(-20);
+  const avoidFiguresStr = recentCompleted.length > 0 ? recentCompleted.join(", ") : "None";
+  
+  while (attempts < 4) {
+    attempts++;
+    console.log(`Generation attempt ${attempts}...`);
+    
+    const messages = [
+      {
+        role: "system",
+        content: "You are a database generator. You output ONLY valid JSON, with absolutely no markdown formatting, backticks, or extra commentary. Your output must be a single JSON object."
+      },
+      {
+        role: "user",
+        content: `Propose 1 famous Vietnamese True Crime case (vụ án có thật tại Việt Nam, đặc biệt là giai đoạn trước năm 1975 hoặc vụ án hình sự nổi tiếng) and 3 SEO YouTube titles for it in Vietnamese. 
+Avoid these already completed cases: ${avoidFiguresStr}.
 
 You must respond in this exact JSON format:
 {"historical_figure": "Name of the case/person", "selected_title": "Title | Góc Tối Pháp Luật"}
@@ -38,23 +48,46 @@ You must respond in this exact JSON format:
 Example:
 {"historical_figure": "Vụ án Bạch Hải Đường", "selected_title": "Tướng Cướp Bạch Hải Đường - Tiếng Súng Cuối Cùng Và Giọt Nước Mắt Muộn Màng | Góc Tối Pháp Luật"}
 `
-    }
-  ];
+      }
+    ];
 
-  const aiResponse = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fp8-fast", {
-    messages,
-    max_tokens: 2048
-  });
-  let responseText = aiResponse.response || aiResponse;
-  if (typeof responseText !== 'string') {
-    responseText = JSON.stringify(responseText);
+    try {
+      const aiResponse = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fp8-fast", {
+        messages,
+        max_tokens: 2048
+      });
+      let responseText = aiResponse.response || aiResponse;
+      if (typeof responseText !== 'string') {
+        responseText = JSON.stringify(responseText);
+      }
+      
+      const jsonStr = extractFirstJsonObject(responseText);
+      if (!jsonStr) {
+        console.log("Could not find a valid JSON object in the AI response: " + responseText);
+        continue;
+      }
+      
+      const tempResult = JSON.parse(jsonStr);
+      const figure = tempResult.historical_figure || "";
+      if (!figure) continue;
+      
+      const figNorm = normalizeText(figure);
+      const isDuplicate = completedFigures.some(fig => normalizeText(fig) === figNorm);
+      if (isDuplicate) {
+        console.log(`Duplicate filtered out: Case "${figure}" is already in completed list.`);
+        continue;
+      }
+      
+      result = tempResult;
+      break;
+    } catch (e) {
+      console.log(`Error in attempt ${attempts}: ${e.message}`);
+    }
   }
   
-  const jsonStr = extractFirstJsonObject(responseText);
-  if (!jsonStr) {
-    throw new Error("Could not find a valid JSON object in the AI response: " + responseText);
+  if (!result) {
+    throw new Error("Failed to generate a unique True Crime case after 4 attempts.");
   }
-  const result = JSON.parse(jsonStr);
 
   // 4. Append row to Master GSheet (GDrive folder link left empty for now)
   const newRowId = generateUUID();
@@ -91,6 +124,18 @@ Example:
     }
   );
   */
+}
+
+// Helper: Normalize text by stripping accents, all punctuation/quotes and spaces
+function normalizeText(str) {
+  if (!str) return "";
+  return str.toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/['’‘"“”\-\.,:;!\?_#\*]/g, "") // Remove all punctuation, quotes, hashtags
+    .replace(/\s+/g, " ") // Collapse multiple spaces
+    .trim();
 }
 
 // Helper: Generate UUID
